@@ -31,7 +31,7 @@ def GPT_response(text):
     # 接收回應
 
 # 建立 Gemini 模型物件（你可以選用不同版本）
-model = genai.GenerativeModel("gemini-1.5-flash")  # 選擇 flash 或 pro 模型
+model = genai.GenerativeModel("Gemini 2.0 Flash")  # 選擇 flash 或 pro 模型
 
 # 發送請求給 Gemini 模型
 response = model.generate_content(

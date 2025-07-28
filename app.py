@@ -22,7 +22,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # GPT 回應函式
 def GPT_response(text):
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-2.5")
 
     response = model.generate_content(
         text,

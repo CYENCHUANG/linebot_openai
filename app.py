@@ -14,6 +14,7 @@ import datetime
 import openai
 import time
 import traceback
+import google.generativeai as genai
 #======python的函數庫==========
 
 app = Flask(__name__)
@@ -23,13 +24,27 @@ line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))
 # Channel Secret
 handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
 # OPENAI API Key初始化設定
-openai.api_key = os.getenv('OPENAI_API_KEY')
+genai.api_key = os.getenv('OPENAI_API_KEY')
 
 
 def GPT_response(text):
     # 接收回應
-    response = openai.Completion.create(model="Gemini 2.5 Flash", prompt=text, temperature=0.5, max_tokens=500)
-    print(response)
+
+# 建立 Gemini 模型物件（你可以選用不同版本）
+model = genai.GenerativeModel("gemini-1.5-flash")  # 選擇 flash 或 pro 模型
+
+# 發送請求給 Gemini 模型
+response = model.generate_content(
+    text,
+    generation_config={
+        "temperature": 0.5,
+        "max_output_tokens": 500
+    }
+)
+
+# 取得回應文字
+print(response.text)
+
     # 重組回應
     answer = response['choices'][0]['text'].replace('。','')
     return answer

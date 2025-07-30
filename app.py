@@ -116,11 +116,13 @@ def handle_message(event):
 
 原文：{msg}
 
-請以總計400字內，依序列點回答，格式清楚易讀。"""
+請限制回覆在 200 字內，並以條列方式回答，格式清楚易讀。"""
             reply_text = GPT_response(prompt)
 
         else:
-            reply_text = GPT_response(prompt)  # ✅ 一般模式直接呼叫 Gemini 回覆
+	
+            msg = f"請限制回覆在 200 字內。以下是使用者輸入：{msg}"
+            reply_text = GPT_response(msg)  # ✅ 一般模式直接呼叫 Gemini 回覆
 
 
         # 回覆訊息，同時附加 Quick Reply 按鈕

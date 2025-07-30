@@ -43,13 +43,13 @@ def load_prompt_template():
 def GPT_response(text):
     try:
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
-        prompt = f"{load_prompt_template()}\n\n{text.strip()}"  # 💡 自動套用語意模板
+        prompt = f"{load_prompt_template()}\n\n{text.strip()}"  # 套用模板
 
-        response = model.generate_content(
-            text,
+        response = model.generate_content(  # ✅ 正確使用 prompt
+            prompt,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 1000,
+                "max_output_tokens": 400,  # 約 200 中文字
                 "top_p": 0.9,
                 "top_k": 40
             },
@@ -120,12 +120,11 @@ def handle_message(event):
             reply_text = GPT_response(prompt)
 
         else:
-	
-            msg = f"請限制回覆在 200 字內。以下是使用者輸入：{msg}"
-            reply_text = GPT_response(msg)  # ✅ 一般模式直接呼叫 Gemini 回覆
+            prompt = f"""請針對以下內容簡短回覆，限 200 字內：
+            
+使用者輸入：{msg}"""
+            reply_text = GPT_response(prompt)
 
-
-        # 回覆訊息，同時附加 Quick Reply 按鈕
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=reply_text, quick_reply=quick_reply_buttons())
@@ -138,9 +137,19 @@ def handle_message(event):
             TextSendMessage(text='AI 回應發生錯誤，請檢查伺服器 Log 或 API 金鑰。', quick_reply=quick_reply_buttons())
         )
 
+
+
+
+
 @handler.add(PostbackEvent)
 def handle_postback(event):
     print(f"Postback data: {event.postback.data}")
+
+
+
+
+
+
 
 @handler.add(MemberJoinedEvent)
 def welcome(event):

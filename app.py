@@ -14,6 +14,8 @@ import requests
 import time
 from functools import lru_cache
 
+
+
 app = Flask(__name__)
 
 # 初始化 LINE Bot
@@ -26,16 +28,28 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 # 用戶狀態管理 (重啟後清空)
 user_status = {}
 
+
+# 讀入模板
+def load_prompt_template():
+    try:
+        with open("prompt_config.md", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""  # 若找不到模板就略過，不讓程式中斷
+
+
 # 快取 GPT 回應結果，減少重複呼叫
 @lru_cache(maxsize=256)
 def GPT_response(text):
     try:
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        prompt = f"{load_prompt_template()}\n\n{text.strip()}"  # 💡 自動套用語意模板
+
         response = model.generate_content(
             text,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 200,
+                "max_output_tokens": 500,
                 "top_p": 0.9,
                 "top_k": 40
             },

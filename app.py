@@ -2,7 +2,7 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    MessageEvent, TextMessage, TextSendMessage,
     PostbackEvent, MemberJoinedEvent, FollowEvent,
     QuickReply, QuickReplyButton, MessageAction
 )
@@ -23,10 +23,10 @@ handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
 # 初始化 Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# 簡易用戶狀態管理 (重啟後失效)
+# 簡易用戶狀態管理 (重啟後會清空)
 user_status = {}
 
-# 快取 GPT 回應結果，避免頻繁呼叫
+# 快取 GPT 回應結果，減少重複呼叫
 @lru_cache(maxsize=256)
 def GPT_response(text):
     try:
@@ -35,7 +35,7 @@ def GPT_response(text):
             text,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 300,
+                "max_output_tokens": 1000,  # 允許較多字數
                 "top_p": 0.9,
                 "top_k": 40
             },
@@ -64,11 +64,7 @@ def callback():
 
     return 'OK'
 
-# 將文字拆成多段，避免 Flex Message 單個段落字數過長造成錯誤
-def split_text(text, max_length=400):
-    return [text[i:i+max_length] for i in range(0, len(text), max_length)]
-
-# 傳送帶 Quick Reply 的「翻譯小助理」啟動按鈕給用戶
+# 傳送帶 Quick Reply 的翻譯小助理啟動按鈕
 def send_quickreply_translator(user_id):
     quick_reply = QuickReply(
         items=[
@@ -82,27 +78,6 @@ def send_quickreply_translator(user_id):
         quick_reply=quick_reply
     )
     line_bot_api.push_message(user_id, message)
-
-# 傳送「一般模式」Quick Reply 功能按鈕
-def send_quickreply_general(reply_token):
-    quick_reply = QuickReply(
-        items=[
-            QuickReplyButton(
-                action=MessageAction(label="翻譯小助理", text="啟動翻譯小助理")
-            ),
-            QuickReplyButton(
-                action=MessageAction(label="一般功能1", text="一般功能1")
-            ),
-            QuickReplyButton(
-                action=MessageAction(label="一般功能2", text="一般功能2")
-            ),
-        ]
-    )
-    message = TextSendMessage(
-        text="這是一般模式，請選擇功能：",
-        quick_reply=quick_reply
-    )
-    line_bot_api.reply_message(reply_token, message)
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -128,38 +103,18 @@ def handle_message(event):
 
 請依序列點回答，格式清楚易讀。"""
             GPT_answer = GPT_response(prompt)
-            parts = split_text(GPT_answer, 400)
 
-            bubbles = []
-            for part in parts[:5]:
-                bubble = {
-                    "type": "bubble",
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [{
-                            "type": "text",
-                            "text": part,
-                            "wrap": True,
-                            "size": "sm"
-                        }]
-                    }
-                }
-                bubbles.append(bubble)
-
-            flex_contents = {
-                "type": "carousel",
-                "contents": bubbles
-            }
-
+            # 直接純文字回覆，不用 Flex Message
             line_bot_api.reply_message(
                 event.reply_token,
-                FlexSendMessage(alt_text="翻譯小助理回覆", contents=flex_contents)
+                TextSendMessage(text=GPT_answer)
             )
         else:
-            # 一般模式回覆（示範文字，可替換成 GPT 或其他回覆）
-            send_quickreply_general(event.reply_token)
-
+            # 非翻譯狀態簡單回覆文字
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="您好，有什麼我可以幫忙的嗎？輸入「功能」可查看更多服務。")
+            )
     except Exception:
         print(traceback.format_exc())
         line_bot_api.reply_message(
@@ -186,7 +141,7 @@ def handle_follow(event):
     send_quickreply_translator(user_id)
 
 # Render 自我喚醒，避免服務睡死
-WAKE_URL = 'https://linebot-openai-kysy.onrender.com/callback'  # 請改成你部署的正式網址
+WAKE_URL = 'https://linebot-openai-kysy.onrender.com/callback'  # 請改成你的正式網址
 
 def keep_awake():
     while True:
@@ -195,7 +150,7 @@ def keep_awake():
             print(f"[WAKE-UP] Status: {res.status_code}")
         except Exception as e:
             print(f"[WAKE-UP ERROR] {e}")
-        time.sleep(840)  # 每 14 分鐘喚醒一次
+        time.sleep(840)  # 每14分鐘喚醒一次
 
 if __name__ == "__main__":
     threading.Thread(target=keep_awake, daemon=True).start()

@@ -10,6 +10,9 @@ import requests
 import time
 from functools import lru_cache  # ✅ 加入快取功能
 
+# 🔧 NEW：QuickReply 類別
+from linebot.models import QuickReply, QuickReplyButton, PostbackAction
+
 # Flask 設定
 app = Flask(__name__)
 
@@ -85,6 +88,23 @@ def handle_message(event):
                         "wrap": True,
                         "size": "sm"
                     }]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            # 🔧 NEW：Flex 內部按鈕（原句翻譯）
+                            "type": "button",
+                            "style": "primary",
+                            "color": "#1E88E5",
+                            "action": {
+                                "type": "postback",
+                                "label": "翻譯小助理",
+                                "data": f"translate_helper::{msg}"
+                            }
+                        }
+                    ]
                 }
             }
             bubbles.append(bubble)
@@ -94,20 +114,54 @@ def handle_message(event):
             "contents": bubbles
         }
 
+        # 🔧 NEW：底部 QuickReply 常駐選單
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=PostbackAction(label="翻譯小助理", data="launch_translate_helper"))
+        ])
+
+        response_list = [
+            FlexSendMessage(alt_text="AI 回覆", contents=flex_contents),
+            TextSendMessage(text="請選擇接下來的操作：", quick_reply=quick_reply)
+        ]
         if len(parts) > 5:
             tips = TextSendMessage(text="⚠️ 回覆內容較長，僅顯示前五段。如需完整內容請改用 Web 或郵件查詢。")
-            line_bot_api.reply_message(event.reply_token, [FlexSendMessage(alt_text="AI 回覆", contents=flex_contents), tips])
-        else:
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="AI 回覆", contents=flex_contents))
+            response_list.append(tips)
+
+        line_bot_api.reply_message(event.reply_token, response_list)
 
     except:
         print(traceback.format_exc())
         line_bot_api.reply_message(event.reply_token, TextSendMessage('AI 回應發生錯誤，請查看伺服器 Log 訊息或確認 API 金鑰是否有效'))
 
-# 處理 Postback 回傳事件（可擴充）
+# 🔧 NEW：翻譯小助理入口與翻譯回應邏輯
 @handler.add(PostbackEvent)
 def handle_postback(event):
-    print(event.postback.data)
+    data = event.postback.data
+
+    if data == "launch_translate_helper":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            text="🧠 翻譯小助理已啟動，請輸入你想翻譯或優化的句子。我會提供正式語氣的中英文對照、文法建議、同義詞與例句。"
+        ))
+        return
+
+    if data.startswith("translate_helper::"):
+        text = data.split("::")[1]
+        prompt = f"""你現在是一個正式專業的翻譯小助理，請針對以下內容進行語言增強服務。
+回覆請依照以下格式：
+
+翻譯小助理  
+Chinese：...(原文或翻譯)  
+English：...(正式語氣翻譯)  
+文法建議：...  
+同義詞建議：...  
+延伸用法 / 例句：...
+
+以下是要翻譯與優化的內容：
+{text}"""
+
+        result = GPT_response(prompt)
+        parts = split_text(result, 400)
+        line_bot_api.reply_message(event.reply_token, [TextSendMessage(text=p) for p in parts])
 
 # 新成員加入群組歡迎訊息
 @handler.add(MemberJoinedEvent)

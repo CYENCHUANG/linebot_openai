@@ -49,7 +49,7 @@ def GPT_response(text):
             text,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 500,
+                "max_output_tokens": 1000,
                 "top_p": 0.9,
                 "top_k": 40
             },
@@ -110,18 +110,18 @@ def handle_message(event):
 
         elif user_status.get(uid) == "translating":
             prompt = f"""請對以下內容做詳細處理：
+
 1. 中英文對照翻譯
-2. 文法優化建議
-3. 同義詞（中英皆提供）
-4. 例句或衍伸用法
+2. 用字與文法優化建議
 
 原文：{msg}
 
-請依序列點回答，格式清楚易讀。"""
+請以總計400字內，依序列點回答，格式清楚易讀。"""
             reply_text = GPT_response(prompt)
 
         else:
-            reply_text = "您好，有什麼我可以幫忙的嗎？輸入「功能」可查看更多服務。"
+            reply_text = GPT_response(prompt)  # ✅ 一般模式直接呼叫 Gemini 回覆
+
 
         # 回覆訊息，同時附加 Quick Reply 按鈕
         line_bot_api.reply_message(

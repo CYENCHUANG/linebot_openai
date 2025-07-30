@@ -35,7 +35,7 @@ def GPT_response(text):
             text,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 1000,
+                "max_output_tokens": 200,
                 "top_p": 0.9,
                 "top_k": 40
             },

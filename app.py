@@ -1,14 +1,16 @@
 from flask import Flask, request, abort
-
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
-#====== 函數庫 ======
+# ====== 函數庫 ======
 import os
 import traceback
 import google.generativeai as genai
-#====== 函數庫 ======
+import threading
+import requests
+import time
+# ====== 函數庫 ======
 
 # Flask 設定
 app = Flask(__name__)
@@ -23,7 +25,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 # GPT 回應函式
 def GPT_response(text):
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
     response = model.generate_content(
         text,
         generation_config={
@@ -31,7 +32,6 @@ def GPT_response(text):
             "max_output_tokens": 500
         }
     )
-
     answer = response.text.strip().replace("。", "")
     return answer
 
@@ -72,10 +72,23 @@ def welcome(event):
     gid = event.source.group_id
     profile = line_bot_api.get_group_member_profile(gid, uid)
     name = profile.display_name
-    message = TextSendMessage(text=f'{name} 歡迎加入！')
+    message = TextSendMessage(text=f'{name} 歡迎加入！目前 CYen 正在白金打工!請多多指教!')
     line_bot_api.reply_message(event.reply_token, message)
 
-# 啟動伺服器
+# ====== Render 自我喚醒機制 ======
+WAKE_URL = 'https://linebot-openai-kysy.onrender.com/callback'  # ⬅️ 請替換為您的正式網址
+
+def keep_awake():
+    while True:
+        try:
+            res = requests.get(WAKE_URL)
+            print(f"[WAKE-UP] Status: {res.status_code}")
+        except Exception as e:
+            print(f"[WAKE-UP ERROR] {e}")
+        time.sleep(840)  # 每 14 分鐘喚醒一次
+
+# ====== 啟動伺服器 ======
 if __name__ == "__main__":
+    threading.Thread(target=keep_awake, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

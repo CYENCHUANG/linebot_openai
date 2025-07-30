@@ -2,7 +2,9 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage, PostbackEvent, MemberJoinedEvent
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    PostbackEvent, MemberJoinedEvent, FollowEvent,
+    QuickReply, QuickReplyButton, MessageAction
 )
 import os
 import traceback
@@ -10,8 +12,7 @@ import google.generativeai as genai
 import threading
 import requests
 import time
-from functools import lru_cache  # ✅ 加入快取功能
-
+from functools import lru_cache
 
 app = Flask(__name__)
 
@@ -22,10 +23,10 @@ handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
 # 初始化 Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# 使用全域字典儲存 user 狀態 (重新啟動會失效)
+# 簡易用戶狀態管理 (重啟後失效)
 user_status = {}
 
-# 快取 GPT 回應結果，減少重複呼叫
+# 快取 GPT 回應結果，避免頻繁呼叫
 @lru_cache(maxsize=256)
 def GPT_response(text):
     try:
@@ -45,13 +46,11 @@ def GPT_response(text):
                 {"category": "HARM_CATEGORY_DANGEROUS", "threshold": 3}
             ]
         )
-        answer = response.text.strip()
-        return answer
+        return response.text.strip()
     except Exception as e:
         print("[Gemini ERROR]", e)
         return "⚠️ AI 回應發生錯誤，請稍後再試或檢查 API 金鑰。"
 
-# LINE Webhook 接收端點
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature', '')
@@ -65,26 +64,60 @@ def callback():
 
     return 'OK'
 
-# 分段文本工具，避免 Flex Message 單段字數過長
+# 將文字拆成多段，避免 Flex Message 單個段落字數過長造成錯誤
 def split_text(text, max_length=400):
     return [text[i:i+max_length] for i in range(0, len(text), max_length)]
 
-# 處理使用者文字訊息
+# 傳送帶 Quick Reply 的「翻譯小助理」啟動按鈕給用戶
+def send_quickreply_translator(user_id):
+    quick_reply = QuickReply(
+        items=[
+            QuickReplyButton(
+                action=MessageAction(label="翻譯小助理", text="啟動翻譯小助理")
+            ),
+        ]
+    )
+    message = TextSendMessage(
+        text="請點選下方按鈕啟動翻譯小助理",
+        quick_reply=quick_reply
+    )
+    line_bot_api.push_message(user_id, message)
+
+# 傳送「一般模式」Quick Reply 功能按鈕
+def send_quickreply_general(reply_token):
+    quick_reply = QuickReply(
+        items=[
+            QuickReplyButton(
+                action=MessageAction(label="翻譯小助理", text="啟動翻譯小助理")
+            ),
+            QuickReplyButton(
+                action=MessageAction(label="一般功能1", text="一般功能1")
+            ),
+            QuickReplyButton(
+                action=MessageAction(label="一般功能2", text="一般功能2")
+            ),
+        ]
+    )
+    message = TextSendMessage(
+        text="這是一般模式，請選擇功能：",
+        quick_reply=quick_reply
+    )
+    line_bot_api.reply_message(reply_token, message)
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     uid = event.source.user_id
     msg = event.message.text.strip()
     try:
-        # 啟動「翻譯小助理」
         if msg == "啟動翻譯小助理":
             user_status[uid] = "translating"
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="已啟動翻譯小助理！請輸入想要翻譯的內容，我會同時提供中英文翻譯、文法優化和同義詞建議。")
             )
-        # 進入「翻譯模式」，任何輸入都當翻譯內容處理
+        elif msg == "功能":
+            send_quickreply_translator(uid)
         elif user_status.get(uid) == "translating":
-            # 送給 Gemini 的 Prompt
             prompt = f"""請對以下內容做詳細處理：
 1. 中英文對照翻譯
 2. 文法優化建議
@@ -124,57 +157,20 @@ def handle_message(event):
                 FlexSendMessage(alt_text="翻譯小助理回覆", contents=flex_contents)
             )
         else:
-            # 非翻譯狀態，使用原本 GPT 直接回答模式
-            GPT_answer = GPT_response(msg)
-            parts = split_text(GPT_answer, 400)
-            bubbles = []
-            for part in parts[:5]:
-                bubble = {
-                    "type": "bubble",
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [{
-                            "type": "text",
-                            "text": part,
-                            "wrap": True,
-                            "size": "sm"
-                        }]
-                    }
-                }
-                bubbles.append(bubble)
-
-            flex_contents = {
-                "type": "carousel",
-                "contents": bubbles
-            }
-
-            # 若超過5段，附加提示
-            if len(parts) > 5:
-                tips = TextSendMessage(text="⚠️ 回覆內容較長，僅顯示前五段。如需完整內容請改用 Web 或郵件查詢。")
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    [FlexSendMessage(alt_text="AI 回覆", contents=flex_contents), tips]
-                )
-            else:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    FlexSendMessage(alt_text="AI 回覆", contents=flex_contents)
-                )
+            # 一般模式回覆（示範文字，可替換成 GPT 或其他回覆）
+            send_quickreply_general(event.reply_token)
 
     except Exception:
         print(traceback.format_exc())
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text='AI 回應發生錯誤，請查看伺服器 Log 訊息或確認 API 金鑰是否有效。')
+            TextSendMessage(text='AI 回應發生錯誤，請檢查伺服器 Log 或 API 金鑰。')
         )
 
-# Postback 事件處理 (可擴充)
 @handler.add(PostbackEvent)
 def handle_postback(event):
     print(f"Postback data: {event.postback.data}")
 
-# 新成員加入群組，歡迎訊息
 @handler.add(MemberJoinedEvent)
 def welcome(event):
     uid = event.joined.members[0].user_id
@@ -184,8 +180,13 @@ def welcome(event):
     message = TextSendMessage(text=f'{name} 歡迎加入！目前我正在白金打工！請多多指教！')
     line_bot_api.reply_message(event.reply_token, message)
 
+@handler.add(FollowEvent)
+def handle_follow(event):
+    user_id = event.source.user_id
+    send_quickreply_translator(user_id)
+
 # Render 自我喚醒，避免服務睡死
-WAKE_URL = 'https://linebot-openai-kysy.onrender.com/callback'  # 請改成你的正式服務網址
+WAKE_URL = 'https://linebot-openai-kysy.onrender.com/callback'  # 請改成你部署的正式網址
 
 def keep_awake():
     while True:
@@ -194,7 +195,7 @@ def keep_awake():
             print(f"[WAKE-UP] Status: {res.status_code}")
         except Exception as e:
             print(f"[WAKE-UP ERROR] {e}")
-        time.sleep(840)  # 每14分鐘喚醒一次
+        time.sleep(840)  # 每 14 分鐘喚醒一次
 
 if __name__ == "__main__":
     threading.Thread(target=keep_awake, daemon=True).start()

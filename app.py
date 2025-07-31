@@ -180,7 +180,7 @@ def keep_awake():
             print(f"[WAKE-UP] Status: {res.status_code}")
         except Exception as e:
             print(f"[WAKE-UP ERROR] {e}")
-        time.sleep(840)  # 每14分鐘喚醒一次
+        time.sleep(300)  # 每14分鐘喚醒一次
 
 if __name__ == "__main__":
     threading.Thread(target=keep_awake, daemon=True).start()

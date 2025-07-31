@@ -45,7 +45,7 @@ def GPT_response(text):
             prompt,
             generation_config={
                 "temperature": 0.4,
-                "max_output_tokens": 500,
+                "max_output_tokens": 600,
                 "top_p": 0.9,
                 "top_k": 40
             },
@@ -115,11 +115,11 @@ def handle_message(event):
 
 原文：{msg}
 
-請限制回覆在 200 字內，並以條列方式回答，格式清楚易讀。"""
+請限制回覆在 300 字內，並以條列方式回答，格式清楚易讀。"""
             reply_text = GPT_response(prompt)
 
         else:
-            prompt = f"""請針對以下內容簡短回覆，限 200 字內：
+            prompt = f"""請針對以下內容簡短回覆，限 300 字內：
 
 使用者輸入：{msg}"""
             reply_text = GPT_response(prompt)

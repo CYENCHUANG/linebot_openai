@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 # 全域常數
 GEMINI_MODEL_NAME = "gemini-2.5-flash-lite"  # Gemini 模型
-OPENAI_MODEL_NAME = "gpt-4o"                 # GPT 模型改為 gpt-4o
+OPENAI_MODEL_NAME = "gpt-4o-mini"                 # GPT 模型改為 gpt-4o-mini
 
 # 初始化 LINE Bot
 line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))

@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 # 全域常數
 GEMINI_MODEL_NAME = "gemini-2.5-flash-lite"  # Gemini 模型
-OPENAI_MODEL_NAME = "gpt-3.5-turbo"                 # GPT 模型改為 gpt-3.5-turbo 原"gpt-4o-mini"
+OPENAI_MODEL_NAME = "gpt-3.5-turbo"                 # GPT 模型改為 gpt-4o
 
 # 初始化 LINE Bot
 line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))
@@ -80,8 +80,9 @@ def gpt_response(text):
         )
         return completion.choices[0].message["content"].strip()
     except Exception as e:
-        print("[OpenAI ERROR]", e)
-        return "⚠️ GPT 回應發生錯誤，請稍後再試或檢查 API 金鑰。"
+        # 印出詳細錯誤方便調試
+        print(f"[OpenAI ERROR] Type: {type(e)} - Args: {e.args}")
+        return f"⚠️ GPT 回應發生錯誤：{e}"
 
 def handle_translation_mode(msg, engine="gemini"):
     prompt = f"""請對以下內容做詳細處理：

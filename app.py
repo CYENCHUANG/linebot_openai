@@ -1,4 +1,4 @@
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -9,13 +9,13 @@ from linebot.models import (
 import os
 import traceback
 import google.generativeai as genai
-import threading
-import requests
-import time
 from functools import lru_cache
 from datetime import datetime
 
 app = Flask(__name__)
+
+# 全域常數：Gemini 模型名稱
+GEMINI_MODEL_NAME = "gemini-2.5-flash-lite"
 
 # 初始化 LINE Bot
 line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))
@@ -39,7 +39,7 @@ def load_prompt_template():
 @lru_cache(maxsize=256)
 def GPT_response(text):
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
         prompt = f"{load_prompt_template()}\n\n{text.strip()}"
         response = model.generate_content(
             prompt,
@@ -61,6 +61,19 @@ def GPT_response(text):
         print("[Gemini ERROR]", e)
         return "⚠️ AI 回應發生錯誤，請稍後再試或檢查 API 金鑰。"
 
+# 翻譯模式處理函式
+def handle_translation_mode(msg):
+    prompt = f"""請對以下內容做詳細處理：
+
+1. 中英文對照翻譯
+2. 用字與文法優化建議
+
+原文：{msg}
+
+請限制回覆在 300 字內，並以條列方式回答，格式清楚易讀。"""
+    return GPT_response(prompt)
+
+# LINE webhook callback
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature', '')
@@ -72,12 +85,14 @@ def callback():
         abort(400)
     return 'OK'
 
+# 健康檢查 API（JSON 格式）
 @app.route("/ping", methods=["GET"])
 def ping():
     now = datetime.utcnow().isoformat()
     print(f"[PING] {now} - keep-alive ping received")
-    return "OK", 200
+    return jsonify({"status": "ok", "timestamp": now}), 200
 
+# 快速回覆按鈕
 def quick_reply_buttons():
     return QuickReply(
         items=[
@@ -90,6 +105,7 @@ def quick_reply_buttons():
         ]
     )
 
+# 處理文字訊息
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     uid = event.source.user_id
@@ -108,15 +124,7 @@ def handle_message(event):
                 reply_text = "你目前不在翻譯小助理模式。"
 
         elif user_status.get(uid) == "translating":
-            prompt = f"""請對以下內容做詳細處理：
-
-1. 中英文對照翻譯
-2. 用字與文法優化建議
-
-原文：{msg}
-
-請限制回覆在 300 字內，並以條列方式回答，格式清楚易讀。"""
-            reply_text = GPT_response(prompt)
+            reply_text = handle_translation_mode(msg)
 
         else:
             prompt = f"""請針對以下內容簡短回覆，限 300 字內：
@@ -136,10 +144,12 @@ def handle_message(event):
             TextSendMessage(text='AI 回應發生錯誤，請檢查伺服器 Log 或 API 金鑰。', quick_reply=quick_reply_buttons())
         )
 
+# 處理 Postback
 @handler.add(PostbackEvent)
 def handle_postback(event):
     print(f"Postback data: {event.postback.data}")
 
+# 處理群組新成員加入
 @handler.add(MemberJoinedEvent)
 def welcome(event):
     uid = event.joined.members[0].user_id
@@ -147,11 +157,12 @@ def welcome(event):
     profile = line_bot_api.get_group_member_profile(gid, uid)
     name = profile.display_name
     message = TextSendMessage(
-        text=f'{name} 歡迎加入！目前我正在白金打工！請多多指教！',
+        text=f'{name} 歡迎加入！目前作者正在白金打工！請多多指教！',
         quick_reply=quick_reply_buttons()
     )
     line_bot_api.reply_message(event.reply_token, message)
 
+# 處理使用者加入好友
 @handler.add(FollowEvent)
 def handle_follow(event):
     user_id = event.source.user_id
@@ -161,36 +172,7 @@ def handle_follow(event):
     )
     line_bot_api.push_message(user_id, message)
 
-# Render 自我喚醒模組封裝
-class WakeHelper:
-    def __init__(self, wake_url, interval_sec=300, retries=2, timeout_sec=5):
-        self.wake_url = wake_url
-        self.interval = interval_sec
-        self.retries = retries
-        self.timeout = timeout_sec
-
-    def ping(self):
-        timestamp = datetime.utcnow().isoformat()
-        for attempt in range(1, self.retries + 1):
-            try:
-                res = requests.get(self.wake_url, timeout=self.timeout)
-                print(f"[WAKE-UP] {timestamp} Attempt {attempt} => Status {res.status_code}")
-                if res.status_code == 200:
-                    return
-            except Exception as e:
-                print(f"[WAKE-UP ERROR] Attempt {attempt}: {e}")
-            time.sleep(3)
-
-    def run(self):
-        print("[WAKE-UP] keep_awake thread started")
-        while True:
-            self.ping()
-            time.sleep(self.interval)
-
-WAKE_URL = 'https://linebot-openai-kysy.onrender.com/ping'  # 請確認使用 /ping 路徑
-
+# 主程式入口
 if __name__ == "__main__":
-    wake_helper = WakeHelper(wake_url=WAKE_URL, interval_sec=300)
-    threading.Thread(target=wake_helper.run, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

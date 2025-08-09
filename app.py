@@ -12,13 +12,14 @@ import google.generativeai as genai
 from functools import lru_cache
 from datetime import datetime
 
-import openai
+# 新版 OpenAI SDK 使用方式
+from openai import OpenAI
 
 app = Flask(__name__)
 
 # 全域常數
 GEMINI_MODEL_NAME = "gemini-2.5-flash-lite"  # Gemini 模型
-OPENAI_MODEL_NAME = "gpt-3.5-turbo"                 # GPT 模型改為 gpt-4o
+OPENAI_MODEL_NAME = "gpt-4o-mini"                 # GPT 模型改為 gpt-4o-mini
 
 # 初始化 LINE Bot
 line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))
@@ -27,8 +28,8 @@ handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
 # 初始化 Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# 初始化 GPT API
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# 初始化新版 GPT API 客戶端
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 用戶狀態管理 (重啟後清空)
 user_status = {}
@@ -69,7 +70,7 @@ def gemini_response(text):
 def gpt_response(text):
     try:
         prompt = f"{load_prompt_template()}\n\n{text.strip()}"
-        completion = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=OPENAI_MODEL_NAME,
             messages=[
                 {"role": "system", "content": "You are a helpful translation assistant."},
@@ -78,9 +79,8 @@ def gpt_response(text):
             temperature=0.4,
             max_tokens=600
         )
-        return completion.choices[0].message["content"].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        # 印出詳細錯誤方便調試
         print(f"[OpenAI ERROR] Type: {type(e)} - Args: {e.args}")
         return f"⚠️ GPT 回應發生錯誤：{e}"
 

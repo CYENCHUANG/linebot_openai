@@ -161,6 +161,26 @@ def handle_follow(event):
         quick_reply=quick_reply_buttons()
     )
     line_bot_api.push_message(user_id, message)
+# =========== 每小時推播給 CYen_AI 的路由 ===========
+@app.route("/wake_cyen_ai", methods=['GET', 'POST'])
+def wake_cyen_ai():
+    """
+    每小時自動發訊給 CYen_AI 帳號
+    使用外部排程服務（如 easycron）冲擊
+    """
+    try:
+        target_user_id = os.getenv('CYEN_AI_USER_ID')
+        if not target_user_id:
+            return jsonify({"status": "error", "message": "CYEN_AI_USER_ID not configured"}), 400
+        
+        message = TextSendMessage(text="[喽醒信號] CYen_AI 正在南会中的七傳運動帳號！🔔")
+        line_bot_api.push_message(target_user_id, message)
+        
+        return jsonify({"status": "ok", "message": "Message sent to CYen_AI"}), 200
+    except Exception as e:
+        print(f"[Wake CYen_AI ERROR] {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))

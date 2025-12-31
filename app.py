@@ -162,26 +162,6 @@ def handle_follow(event):
     )
     line_bot_api.push_message(user_id, message)  # 主動推播歡迎訊息給新追蹤者
 
-# =========== 每小時推播給 CYen_AI 的路由 ===========
-#@#@app.route("/wake_cyen_ai", methods=['GET', 'POST'])# 提供 GET / POST 呼叫，用於外部排程「喚醒」CYen_AI
-#def wake_cyen_ai():
-#    """
-#    每小時自動發訊給 CYen_AI 帳號
-#    使用外部排程服務（如 easycron）觸發
-#    """
-#    try:
-#        target_user_id = os.getenv('CYEN_AI_USER_ID')  # 從環境變數取得目標 CYen_AI 使用者 ID
-#        if not target_user_id:  # 若沒有設定目標 ID
-#            return jsonify({"status": "error", "message": "CYEN_AI_USER_ID not configured"}), 400  # 回傳錯誤訊息與 400
-
-#        message = TextSendMessage(text="[喚醒信號] CYen_AI 正在南會中的七傳運動帳號！🔔")  # 要推播給 CYen_AI 的提示訊息（此行文字可自行微調）
-#        line_bot_api.push_message(target_user_id, message)  # 使用 push_message 主動推播訊息給 CYen_AI 的 LINE 帳號
-
-#        return jsonify({"status": "ok", "message": "Message sent to CYen_AI"}), 200  # 回傳成功 JSON 與 200
-#    except Exception as e:
-#        print(f"[Wake CYen_AI ERROR] {e}")  # 若推播過程出錯，印出錯誤訊息
-#        return jsonify({"status": "error", "message": str(e)}), 500  # 回傳錯誤 JSON 與 500
-
 if __name__ == "__main__":  # 當此檔案被直接執行時進入這裡
     port = int(os.environ.get('PORT', 5000))  # 從環境變數讀取 PORT，若沒有就預設 5000
     app.run(host='0.0.0.0', port=port)  # 啟動 Flask 伺服器，對外監聽所有網路介面

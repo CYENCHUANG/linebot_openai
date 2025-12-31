@@ -148,7 +148,7 @@ def welcome(event):
     profile = line_bot_api.get_group_member_profile(gid, uid)  # 透過 API 取得該成員在群組中的個人資料
     name = profile.display_name  # 取得顯示名稱
     message = TextSendMessage(
-        text=f'{name} 歡迎加入！目前作者正在白金打工！請多多指教！',  # 建立歡迎訊息文字
+        text=f'{name} 歡迎加入！目前作者屬於個人工作！請多多指教！',  # 建立歡迎訊息文字
         quick_reply=quick_reply_buttons()  # 附上 quick reply 按鈕
     )
     line_bot_api.reply_message(event.reply_token, message)  # 回覆歡迎訊息到群組
